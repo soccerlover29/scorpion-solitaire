@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scorpion Solitaire</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="header">
+        <h1>Scorpion Solitaire</h1>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <span id="move-counter">Moves: 0</span>
+            <span id="cards-remaining">Cards: 52</span>
+            <span id="step-counter"></span>
+        </div>
+        <div class="header-buttons">
+            <button class="btn" id="btn-new" title="New Game (N)">New Game</button>
+            <button class="btn" id="btn-undo" title="Undo (U / Ctrl+Z)">Undo</button>
+            <button class="btn btn-solve" id="btn-solve" title="Solve (S)">Solve</button>
+        </div>
+    </div>
+
+    <div id="status-banner"></div>
+
+    <div id="game-area">
+        <div id="top-row">
+            <div id="stock-area" title="Click to deal stock cards"></div>
+            <div id="foundation-area"></div>
+        </div>
+        <div id="tableau"></div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>

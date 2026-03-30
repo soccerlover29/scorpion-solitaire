@@ -1,0 +1,8 @@
+{
+  "name": "scorpion-solitaire",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "montecarlo": "node montecarlo-cli.js"
+  }
+}

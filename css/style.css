@@ -1,0 +1,383 @@
+:root {
+    --card-width: clamp(60px, 10vw, 100px);
+    --card-height: calc(var(--card-width) * 1.45);
+    --card-radius: calc(var(--card-width) * 0.08);
+    --card-font: calc(var(--card-width) * 0.22);
+    --card-suit-font: calc(var(--card-width) * 0.28);
+    --facedown-offset: calc(var(--card-width) * 0.15);
+    --faceup-offset: calc(var(--card-width) * 0.35);
+    --col-gap: clamp(4px, 0.8vw, 10px);
+    --bg-color: #1a6b3c;
+    --bg-dark: #145a30;
+    --header-height: 50px;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: var(--bg-color);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: #fff;
+    min-height: 100vh;
+    overflow-x: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Header */
+#header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: var(--bg-dark);
+    height: var(--header-height);
+    border-bottom: 2px solid rgba(0,0,0,0.2);
+}
+
+#header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.header-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.btn {
+    padding: 6px 14px;
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 4px;
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.btn:hover {
+    background: rgba(255,255,255,0.2);
+    border-color: rgba(255,255,255,0.5);
+}
+
+.btn:active {
+    background: rgba(255,255,255,0.3);
+}
+
+.btn-solve {
+    background: rgba(70, 130, 255, 0.3);
+    border-color: rgba(70, 130, 255, 0.6);
+}
+
+.btn-solve:hover {
+    background: rgba(70, 130, 255, 0.5);
+}
+
+.btn-solve.solving {
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Status Banner */
+#status-banner {
+    text-align: center;
+    padding: 6px;
+    font-size: 15px;
+    font-weight: 600;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.3s;
+}
+
+#status-banner.solvable {
+    background: rgba(40, 180, 80, 0.4);
+    color: #a0ffa0;
+}
+
+#status-banner.unsolvable {
+    background: rgba(220, 60, 60, 0.3);
+    color: #ffa0a0;
+}
+
+#status-banner.solving {
+    background: rgba(70, 130, 255, 0.3);
+    color: #a0c0ff;
+}
+
+#status-banner.won {
+    background: rgba(255, 215, 0, 0.4);
+    color: #ffe680;
+    font-size: 20px;
+}
+
+/* Game Area */
+#game-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 8px;
+}
+
+/* Top row: stock + foundations */
+#top-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    width: calc(var(--card-width) * 7 + var(--col-gap) * 6);
+    max-width: 95vw;
+    margin-bottom: 16px;
+}
+
+#stock-area {
+    display: flex;
+    gap: 4px;
+    cursor: pointer;
+}
+
+#foundation-area {
+    display: flex;
+    gap: 4px;
+}
+
+.stock-card, .foundation-slot {
+    width: var(--card-width);
+    height: var(--card-height);
+    border-radius: var(--card-radius);
+    border: 2px dashed rgba(255,255,255,0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--card-suit-font);
+    color: rgba(255,255,255,0.2);
+}
+
+.foundation-slot.filled {
+    border-style: solid;
+    border-color: rgba(255, 215, 0, 0.5);
+    background: rgba(255, 215, 0, 0.1);
+}
+
+/* Tableau */
+#tableau {
+    display: flex;
+    gap: var(--col-gap);
+    justify-content: center;
+    width: calc(var(--card-width) * 7 + var(--col-gap) * 6);
+    max-width: 95vw;
+}
+
+.column {
+    position: relative;
+    width: var(--card-width);
+    min-height: var(--card-height);
+}
+
+.column.drop-target {
+    filter: brightness(1.1);
+}
+
+.column.drop-target::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border: 2px solid rgba(100, 255, 100, 0.5);
+    border-radius: var(--card-radius);
+    pointer-events: none;
+    z-index: 100;
+}
+
+/* Cards */
+.card {
+    position: absolute;
+    width: var(--card-width);
+    height: var(--card-height);
+    border-radius: var(--card-radius);
+    cursor: pointer;
+    transition: box-shadow 0.15s, transform 0.15s;
+    z-index: 1;
+}
+
+.card.face-up {
+    background: #fff;
+    border: 1px solid #ccc;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+.card.face-down {
+    background: linear-gradient(135deg, #2c5aa0, #1e3f70);
+    border: 1px solid #1a3560;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    cursor: default;
+    background-image:
+        linear-gradient(135deg, #2c5aa0 25%, transparent 25%),
+        linear-gradient(225deg, #2c5aa0 25%, transparent 25%),
+        linear-gradient(45deg, #2c5aa0 25%, transparent 25%),
+        linear-gradient(315deg, #2c5aa0 25%, transparent 25%);
+    background-size: 10px 10px;
+    background-color: #1e3f70;
+}
+
+.card.face-down::after {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: calc(var(--card-radius) - 2px);
+}
+
+.card-inner {
+    padding: 4px 6px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.card-top {
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 1px;
+    line-height: 1;
+}
+
+.card-bottom {
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 1px;
+    transform: rotate(180deg);
+    line-height: 1;
+}
+
+.card-rank {
+    font-size: var(--card-font);
+    font-weight: 700;
+}
+
+.card-suit {
+    font-size: calc(var(--card-font) * 0.85);
+}
+
+.card-center-suit {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: calc(var(--card-width) * 0.4);
+    opacity: 0.15;
+}
+
+.card.red .card-rank,
+.card.red .card-suit,
+.card.red .card-center-suit {
+    color: #d32f2f;
+}
+
+.card.black .card-rank,
+.card.black .card-suit,
+.card.black .card-center-suit {
+    color: #222;
+}
+
+/* Selected state */
+.card.selected {
+    box-shadow: 0 0 0 3px rgba(255, 200, 50, 0.8), 0 4px 12px rgba(0,0,0,0.3);
+    transform: translateY(-3px);
+    z-index: 50 !important;
+}
+
+.card.selected ~ .card {
+    box-shadow: 0 0 0 3px rgba(255, 200, 50, 0.8), 0 4px 12px rgba(0,0,0,0.3);
+    transform: translateY(-3px);
+    z-index: 50 !important;
+}
+
+/* Invalid move flash */
+.card.invalid-flash {
+    animation: flashRed 0.3s;
+}
+
+@keyframes flashRed {
+    0%, 100% { box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+    50% { box-shadow: 0 0 0 3px rgba(255, 50, 50, 0.7); }
+}
+
+/* Solver hint markers */
+.card.hint-source {
+    box-shadow: 0 0 0 3px rgba(255, 50, 50, 0.7);
+}
+
+.card.hint-target {
+    box-shadow: 0 0 0 3px rgba(50, 255, 50, 0.7);
+}
+
+/* Stock cards in top area */
+.stock-card.has-card {
+    border-style: solid;
+    border-color: #1a3560;
+    background: linear-gradient(135deg, #2c5aa0, #1e3f70);
+    cursor: pointer;
+}
+
+.stock-card.hint-source {
+    box-shadow: 0 0 0 3px rgba(255, 50, 50, 0.6);
+}
+
+.stock-card.empty {
+    opacity: 0.3;
+}
+
+/* Move counter */
+#move-counter {
+    font-size: 13px;
+    opacity: 0.8;
+}
+
+/* Win animation */
+@keyframes celebrate {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.won #tableau {
+    animation: celebrate 0.5s ease-in-out 3;
+}
+
+/* Cards remaining display */
+#cards-remaining {
+    font-size: 13px;
+    opacity: 0.8;
+}
+
+#step-counter {
+    font-size: 13px;
+    color: #a0c0ff;
+    font-weight: 600;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    :root {
+        --card-width: clamp(42px, 12vw, 60px);
+        --faceup-offset: calc(var(--card-width) * 0.35);
+        --facedown-offset: calc(var(--card-width) * 0.12);
+    }
+
+    #header h1 { font-size: 14px; }
+    .btn { padding: 4px 8px; font-size: 11px; }
+}
