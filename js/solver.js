@@ -7,48 +7,79 @@ const DEFAULT_TIMEOUT = 30000;
 // Score a state: higher = closer to winning
 function scoreState(state) {
     let score = 0;
-    score += (52 - state.cardsRemaining) * 100;
+    // Completed runs are worth the most
+    score += (52 - state.cardsRemaining) * 200;
+
+    let totalFaceDown = 0;
 
     for (let c = 0; c < state.columns.length; c++) {
         const col = state.columns[c];
-        if (col.length === 0) continue;
+        if (col.length === 0) { score += 5; continue; }
 
+        // Penalize face-down cards
+        let faceDownCount = 0;
         for (let r = 0; r < col.length; r++) {
-            if (!col[r].faceUp) score -= 10;
+            if (!col[r].faceUp) faceDownCount++;
+        }
+        score -= faceDownCount * 15;
+        totalFaceDown += faceDownCount;
+
+        // Find ALL same-suit sequences in the column (not just from bottom)
+        let r = col.length - 1;
+        while (r >= 0) {
+            if (!col[r].faceUp) { r--; continue; }
+            let seqLen = 1;
+            let seqStart = r;
+            while (seqStart > 0 && col[seqStart - 1].faceUp &&
+                   getSuit(col[seqStart - 1].id) === getSuit(col[seqStart].id) &&
+                   getRank(col[seqStart - 1].id) === getRank(col[seqStart].id) + 1) {
+                seqLen++;
+                seqStart--;
+            }
+            // Value longer sequences more (quadratic bonus)
+            score += seqLen * seqLen * 2;
+
+            // Bonus for king-led sequences (closer to a complete run)
+            if (col[seqStart].faceUp && getRank(col[seqStart].id) === 12) {
+                score += seqLen * 8;
+                // Extra bonus if king is at row 0 (top of column)
+                if (seqStart === 0) score += seqLen * 4;
+            }
+
+            // Bonus for sequences that end with Ace (complete from bottom)
+            if (getRank(col[r].id) === 0) {
+                score += seqLen * 5;
+            }
+
+            r = seqStart - 1;
         }
 
-        // Count same-suit sequences from bottom
-        let seqLen = 1;
-        for (let r = col.length - 2; r >= 0; r--) {
-            if (!col[r].faceUp) break;
-            if (getSuit(col[r].id) === getSuit(col[r + 1].id) &&
-                getRank(col[r].id) === getRank(col[r + 1].id) + 1) {
-                seqLen++;
-            } else break;
-        }
-        score += seqLen * 5;
-        if (col.length > 0 && col[0].faceUp && getRank(col[0].id) === 12) {
-            score += seqLen * 3;
+        // Bonus for columns that are entirely face-up
+        if (faceDownCount === 0 && col.length > 0) {
+            score += 10;
         }
     }
+
+    // Bonus for having fewer total face-down cards (revealed progress)
+    score += (12 - totalFaceDown) * 10;
+
+    // Bonus for having dealt stock (opens up more cards)
+    if (state.stockDealt) score += 5;
+
     return score;
 }
 
 export function solve(state, timeout = DEFAULT_TIMEOUT) {
     const startTime = Date.now();
+    const winSearchTimeout = Math.floor(timeout * 0.65);
     const visited = new Set();
     let nodesExplored = 0;
     let visitedFull = false;
 
-    // Pre-compute the recommended first move from initial state
-    const initialMoves = generateMoves(state);
-    const orderedInitial = initialMoves.length > 0 ? orderMoves(state, initialMoves, null) : [];
-    const fallbackFirstMove = orderedInitial.length > 0 ? orderedInitial[0] : null;
-
     let bestResult = {
         solvable: false,
         moves: [],
-        bestMoves: fallbackFirstMove ? [fallbackFirstMove] : [],
+        bestMoves: [],
         bestRemaining: countRemaining(state),
         bestScore: scoreState(state),
         timedOut: false,
@@ -61,7 +92,7 @@ export function solve(state, timeout = DEFAULT_TIMEOUT) {
         nodesExplored++;
 
         if (nodesExplored % 1000 === 0) {
-            if (Date.now() - startTime > timeout) {
+            if (Date.now() - startTime > winSearchTimeout) {
                 bestResult.timedOut = true;
                 return false;
             }
@@ -79,7 +110,7 @@ export function solve(state, timeout = DEFAULT_TIMEOUT) {
             return true;
         }
 
-        // State deduplication — check even if set is full, just don't add new entries
+        // State deduplication
         const hash = hashState(workingState.columns, workingState.stockDealt);
         if (visited.has(hash)) return false;
         if (!visitedFull) {
@@ -95,7 +126,8 @@ export function solve(state, timeout = DEFAULT_TIMEOUT) {
         const score = scoreState(workingState);
 
         if (remaining < bestResult.bestRemaining ||
-            (remaining <= bestResult.bestRemaining && score > bestResult.bestScore)) {
+            (remaining === bestResult.bestRemaining && score > bestResult.bestScore) ||
+            (remaining === bestResult.bestRemaining && score === bestResult.bestScore && moveStack.length > bestResult.bestMoves.length)) {
             bestResult.bestRemaining = remaining;
             bestResult.bestScore = score;
             bestResult.bestMoves = [...moveStack];
@@ -109,15 +141,11 @@ export function solve(state, timeout = DEFAULT_TIMEOUT) {
         const orderedMoves = orderMoves(workingState, moves, lastMove);
 
         for (const move of orderedMoves) {
-            // Skip reverse of last move (check by card identity)
             if (isReverseMove(workingState, move, lastMove)) continue;
 
-            // Skip pointless moves: moving a group that's already in sequence
-            // on a king from one empty col to another empty col
             if (move.type === 'move') {
                 const srcCol = workingState.columns[move.fromCol];
                 const dstCol = workingState.columns[move.toCol];
-                // Don't move a king from top of column to empty column (no progress)
                 if (move.fromRow === 0 && dstCol.length === 0 && isKing(srcCol[0].id)) {
                     continue;
                 }
@@ -139,8 +167,115 @@ export function solve(state, timeout = DEFAULT_TIMEOUT) {
     }
 
     dfs(0, null, []);
+
+    // Phase 2: If no win found, do a dedicated best-path search with fresh state
+    if (!bestResult.solvable) {
+        const phase2Result = findBestPath(state, timeout - (Date.now() - startTime), bestResult);
+        if (phase2Result) {
+            bestResult.bestMoves = phase2Result.bestMoves;
+            bestResult.bestRemaining = phase2Result.bestRemaining;
+            bestResult.bestScore = phase2Result.bestScore;
+        }
+        bestResult.timedOut = (Date.now() - startTime) >= timeout;
+    }
+
     bestResult.nodesExplored = nodesExplored;
+
+    // Ensure we have at least a fallback first move
+    if (bestResult.bestMoves.length === 0) {
+        const initialMoves = generateMoves(state);
+        const orderedInitial = initialMoves.length > 0 ? orderMoves(state, initialMoves, null) : [];
+        if (orderedInitial.length > 0) {
+            bestResult.bestMoves = [orderedInitial[0]];
+        }
+    }
+
     return bestResult;
+}
+
+// Phase 2: Dedicated search for the best non-winning path
+// Uses score-lookahead move ordering and a fresh transposition table
+function findBestPath(state, timeRemaining, currentBest) {
+    if (timeRemaining <= 100) return null;
+    const startTime = Date.now();
+    const deadline = startTime + timeRemaining;
+    const visited = new Set();
+    let nodesExplored = 0;
+
+    let bestMoves = currentBest.bestMoves ? [...currentBest.bestMoves] : [];
+    let bestRemaining = currentBest.bestRemaining;
+    let bestScore = currentBest.bestScore;
+
+    const ws = cloneState(state);
+
+    function dfs(depth, lastMove, moveStack) {
+        nodesExplored++;
+        if (nodesExplored % 500 === 0 && Date.now() >= deadline) return;
+
+        const remaining = countRemaining(ws);
+        const score = scoreState(ws);
+
+        // Update best: prefer fewer remaining, then higher score, then longer path
+        if (remaining < bestRemaining ||
+            (remaining === bestRemaining && score > bestScore) ||
+            (remaining === bestRemaining && score === bestScore && moveStack.length > bestMoves.length)) {
+            bestRemaining = remaining;
+            bestScore = score;
+            bestMoves = [...moveStack];
+        }
+
+        if (depth > 60) return;
+
+        const hash = hashState(ws.columns, ws.stockDealt);
+        if (visited.has(hash)) return;
+        if (visited.size < MAX_VISITED) visited.add(hash);
+
+        const moves = generateMoves(ws);
+        if (moves.length === 0) return;
+
+        // Score-lookahead: evaluate each move's resulting state
+        const scored = [];
+        for (const move of moves) {
+            if (isReverseMove(ws, move, lastMove)) continue;
+            if (move.type === 'move') {
+                const srcCol = ws.columns[move.fromCol];
+                const dstCol = ws.columns[move.toCol];
+                if (move.fromRow === 0 && dstCol.length === 0 && isKing(srcCol[0].id)) continue;
+            }
+
+            executeMove(ws, move);
+            const newRemaining = countRemaining(ws);
+            const newScore = scoreState(ws);
+            undoMove(ws);
+
+            // Composite: prioritize fewer remaining, then higher score
+            const composite = (52 - newRemaining) * 10000 + newScore;
+            scored.push({ move, composite });
+        }
+
+        scored.sort((a, b) => b.composite - a.composite);
+
+        for (const { move } of scored) {
+            executeMove(ws, move);
+            moveStack.push(move);
+
+            dfs(depth + 1, move, moveStack);
+
+            moveStack.pop();
+            undoMove(ws);
+
+            if (Date.now() >= deadline) return;
+        }
+    }
+
+    dfs(0, null, []);
+
+    if (bestRemaining < currentBest.bestRemaining ||
+        (bestRemaining === currentBest.bestRemaining && bestScore > currentBest.bestScore) ||
+        (bestRemaining === currentBest.bestRemaining && bestScore === currentBest.bestScore && bestMoves.length > currentBest.bestMoves.length)) {
+        return { bestMoves, bestRemaining, bestScore };
+    }
+    return null;
 }
 
 function orderMoves(state, moves, lastMove) {
